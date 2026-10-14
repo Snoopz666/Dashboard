@@ -1,1 +1,1280 @@
+```html
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FokusFlow — Tages- & Wochen-Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#080d1a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #080d1a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Timeline line animation & styling */
+        .timeline-line::before {
+            content: '';
+            position: absolute;
+            top: 24px;
+            bottom: -24px;
+            left: 23px;
+            width: 2px;
+            background: linear-gradient(to bottom, #334155 0%, #1e293b 100%);
+            z-index: 0;
+        }
+        .timeline-item:last-child .timeline-line::before {
+            display: none;
+        }
+        .task-checkbox:checked + div {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+        /* Smooth transitions */
+        .transition-all-custom {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
 
+    <!-- Top Navigation / Header -->
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-xl sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="ph-bold ph-compass text-white text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold tracking-tight text-white">FokusFlow</h1>
+                        <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Time-Blocking</span>
+                    </div>
+                    <p id="currentDateDisplay" class="text-xs text-slate-400">Lade Datum...</p>
+                </div>
+            </div>
+
+            <!-- Quick Header Controls -->
+            <div class="flex items-center gap-2.5">
+                <button onclick="openNewTaskModal()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm shadow-lg shadow-indigo-600/25 transition-all-custom active:scale-95">
+                    <i class="ph-bold ph-plus"></i>
+                    <span>Neues Ziel</span>
+                </button>
+                <button onclick="exportData()" title="Backup herunterladen (JSON)" class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition-all-custom">
+                    <i class="ph ph-download-simple text-base text-indigo-400"></i>
+                    <span class="hidden sm:inline">Backup</span>
+                </button>
+                <button onclick="triggerImport()" title="Backup-Datei importieren" class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition-all-custom">
+                    <i class="ph ph-upload-simple text-base text-emerald-400"></i>
+                    <span class="hidden sm:inline">Import</span>
+                </button>
+                <input type="file" id="importFileInput" accept=".json,application/json" class="hidden" onchange="handleImportFile(event)">
+                <button onclick="openResetModal()" title="Beispieldaten wiederherstellen" class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-all-custom">
+                    <i class="ph ph-arrows-counter-clockwise text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Day Selector Strip (Mo - So) -->
+        <section class="mb-8">
+            <div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-2 sm:p-3 shadow-xl">
+                <div class="grid grid-cols-7 gap-1.5 sm:gap-3" id="dayTabsContainer">
+                    <!-- Rendered dynamically via JS -->
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <!-- LEFT COLUMN: Daily Timeline & Tasks (7 Cols on Desktop) -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- Daily Progress Card -->
+                <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+                    <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 id="selectedDayTitle" class="text-xl font-bold text-white">Heutiger Fokus</h2>
+                                <span id="selectedDayBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">Heute</span>
+                            </div>
+                            <p id="dailySummarySubtext" class="text-sm text-slate-400 mt-0.5">Strukturiere deinen Tag mit klaren Zeitblöcken.</p>
+                        </div>
+
+                        <!-- Circular or Big Percentage Pill -->
+                        <div class="flex items-center gap-3 bg-slate-950/70 border border-slate-800/80 px-4 py-2.5 rounded-2xl self-start sm:self-auto">
+                            <div class="text-right">
+                                <span class="text-xs text-slate-400 block">Tagesfortschritt</span>
+                                <span id="dailyCounterText" class="text-xs font-medium text-slate-300">0 von 0 erledigt</span>
+                            </div>
+                            <div class="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400" id="dailyPercentText">
+                                0%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Progress Bar -->
+                    <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800/80">
+                        <div id="dailyProgressBar" class="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+
+                    <!-- Category Filter Pills -->
+                    <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-800/60 overflow-x-auto pb-1 no-scrollbar" id="categoryFilterContainer">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+
+                <!-- Inline Quick-Add Bar -->
+                <form id="quickAddForm" onsubmit="handleQuickAdd(event)" class="bg-slate-900/90 border border-slate-800 focus-within:border-indigo-500/60 rounded-2xl p-3 shadow-lg transition-all-custom">
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <div class="flex items-center gap-2 flex-1 bg-slate-950/80 border border-slate-800/80 rounded-xl px-3.5 py-2.5">
+                            <i class="ph ph-sparkle text-indigo-400 text-lg"></i>
+                            <input type="text" id="quickTitle" required placeholder="Schnelles Ziel hinzufügen (z. B. Deep Work Session)..." class="bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none w-full">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="time" id="quickTime" value="09:00" class="bg-slate-950/80 border border-slate-800/80 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+                            <select id="quickDuration" class="bg-slate-950/80 border border-slate-800/80 text-slate-200 text-xs rounded-xl px-2.5 py-2.5 focus:outline-none focus:border-indigo-500">
+                                <option value="15m">15m</option>
+                                <option value="30m" selected>30m</option>
+                                <option value="45m">45m</option>
+                                <option value="1h">1 Std.</option>
+                                <option value="1.5h">1,5 Std.</option>
+                                <option value="2h">2 Std.</option>
+                            </select>
+                            <select id="quickCategory" class="bg-slate-950/80 border border-slate-800/80 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+                                <option value="fokus">🧠 Fokus</option>
+                                <option value="business">💼 Business</option>
+                                <option value="sport">⚡ Sport</option>
+                                <option value="familie">🌿 Familie</option>
+                                <option value="routine">☀️ Routine</option>
+                            </select>
+                            <button type="submit" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs sm:text-sm transition-all-custom shrink-0">
+                                Hinzufügen
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Visual Timeline List (Structured / Tiimo inspired) -->
+                <div class="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2">
+                            <i class="ph-duotone ph-clock-countdown text-indigo-400 text-xl"></i>
+                            <h3 class="font-semibold text-white text-base">Tages-Timeline</h3>
+                        </div>
+                        <span id="totalPlannedTime" class="text-xs text-slate-400 bg-slate-800/70 px-3 py-1 rounded-lg border border-slate-700/50">
+                            Geplant: 0 Std.
+                        </span>
+                    </div>
+
+                    <div id="timelineContainer" class="space-y-4 relative">
+                        <!-- Tasks dynamically injected here -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN: Weekly Overview, Streaks & Top Wins (5 Cols on Desktop) -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- KPI Stats Row (3 Cards) -->
+                <div class="grid grid-cols-3 gap-3 sm:gap-4">
+                    <!-- Weekly Rate -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+                        <div class="flex items-center justify-between text-slate-400 mb-2">
+                            <span class="text-xs font-medium">Wochenquote</span>
+                            <i class="ph-duotone ph-chart-line-up text-emerald-400 text-lg"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-white" id="weeklySuccessRate">0%</div>
+                        <p class="text-[11px] text-slate-400 mt-1" id="weeklyTotalCompletedSub">0/0 Aufgaben</p>
+                    </div>
+
+                    <!-- Streak -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+                        <div class="flex items-center justify-between text-slate-400 mb-2">
+                            <span class="text-xs font-medium">Aktueller Streak</span>
+                            <i class="ph-fill ph-fire text-amber-400 text-lg"></i>
+                        </div>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-2xl font-bold text-white" id="currentStreakCount">0</span>
+                            <span class="text-xs text-slate-400">Tage</span>
+                        </div>
+                        <p class="text-[11px] text-amber-400/90 mt-1">Weiter so!</p>
+                    </div>
+
+                    <!-- Focus Hours -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+                        <div class="flex items-center justify-between text-slate-400 mb-2">
+                            <span class="text-xs font-medium">Fokus-Zeit</span>
+                            <i class="ph-duotone ph-lightning text-indigo-400 text-lg"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-white" id="weeklyFocusHours">0h</div>
+                        <p class="text-[11px] text-slate-400 mt-1">Erledigt (Woche)</p>
+                    </div>
+                </div>
+
+                <!-- Weekly Bar Chart Card -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="font-bold text-white text-base">Wöchentliche Erfolgsübersicht</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Erreichte Ziele pro Wochentag (Mo–So)</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span class="flex items-center gap-1.5 text-slate-300">
+                                <span class="w-2.5 h-2.5 rounded-sm bg-indigo-500 inline-block"></span> Erledigt
+                            </span>
+                            <span class="flex items-center gap-1.5 text-slate-400">
+                                <span class="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700 inline-block"></span> Offen
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Bar Chart Container -->
+                    <div class="h-48 flex items-end justify-between gap-2 sm:gap-4 pt-6 px-2 border-b border-slate-800/80 pb-3" id="weeklyChartContainer">
+                        <!-- Bars injected via JS -->
+                    </div>
+
+                    <!-- Category Distribution Breakdown -->
+                    <div class="mt-5 pt-2">
+                        <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+                            <span>Verteilung nach Kategorien (diese Woche)</span>
+                            <span id="topCategoryLabel" class="text-slate-300 font-medium">-</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden flex gap-0.5" id="categoryBreakdownBar">
+                            <!-- Segmented bar injected via JS -->
+                        </div>
+                        <div class="flex flex-wrap gap-3 mt-3" id="categoryLegend">
+                            <!-- Legend items via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Wins & Weekly Reflection Notes -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                                <i class="ph-duotone ph-trophy text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-white text-base">Top-Erfolge & Wochen-Notizen</h3>
+                                <p class="text-xs text-slate-400">Halte deine wichtigsten Meilensteine fest</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wins List -->
+                    <div id="winsListContainer" class="space-y-2 mb-4">
+                        <!-- Rendered via JS -->
+                    </div>
+
+                    <!-- Add New Win Input -->
+                    <form onsubmit="handleAddWin(event)" class="flex gap-2 mb-5">
+                        <input type="text" id="newWinInput" placeholder="Neuen Wochen-Erfolg eintragen..." class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60">
+                        <button type="submit" class="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all-custom shrink-0">
+                            + Erfolg
+                        </button>
+                    </form>
+
+                    <!-- Freeform Weekly Reflection Textarea -->
+                    <div class="border-t border-slate-800/80 pt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="weeklyNotesArea" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                                <i class="ph ph-notebook text-indigo-400"></i>
+                                Wöchentliche Reflexion & Fokus-Notizen
+                            </label>
+                            <span id="saveNoteStatus" class="text-[11px] text-emerald-400 opacity-0 transition-opacity duration-300">Gespeichert ✓</span>
+                        </div>
+                        <textarea id="weeklyNotesArea" rows="3" oninput="handleNotesChange(this.value)" placeholder="Was lief diese Woche besonders gut? Was möchte ich nächste Woche optimieren?" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500/60 resize-none leading-relaxed"></textarea>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 mt-8 border-t border-slate-800/60 text-center sm:flex items-center justify-between text-xs text-slate-500">
+        <p>FokusFlow Dashboard • Inspiriert von visuellem Time-Blocking</p>
+        <p class="mt-1 sm:mt-0">Alle Daten werden automatisch lokal in deinem Browser gespeichert (<code class="text-slate-400">localStorage</code>).</p>
+    </footer>
+
+    <!-- MODAL: Add / Edit Detailed Task -->
+    <div id="taskModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-fade-in">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 id="modalTitle" class="text-lg font-bold text-white">Neues Tagesziel planen</h3>
+                <button onclick="closeTaskModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <form id="detailedTaskForm" onsubmit="handleSaveDetailedTask(event)" class="space-y-4 mt-4">
+                <input type="hidden" id="editTaskId" value="">
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Bezeichnung des Ziels / der Aufgabe *</label>
+                    <input type="text" id="modalTaskTitle" required placeholder="z. B. Konzept für Q4-Strategie ausarbeiten" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Wochentag</label>
+                        <select id="modalTaskDay" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <option value="0">Montag</option>
+                            <option value="1">Dienstag</option>
+                            <option value="2">Mittwoch</option>
+                            <option value="3">Donnerstag</option>
+                            <option value="4">Freitag</option>
+                            <option value="5">Samstag</option>
+                            <option value="6">Sonntag</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Kategorie</label>
+                        <select id="modalTaskCategory" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <option value="fokus">🧠 Fokus & Deep Work</option>
+                            <option value="business">💼 Business & Meetings</option>
+                            <option value="sport">⚡ Sport & Gesundheit</option>
+                            <option value="familie">🌿 Familie & Freizeit</option>
+                            <option value="routine">☀️ Morgen-/Abendroutine</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Startzeit (Optional)</label>
+                        <input type="time" id="modalTaskTime" value="10:00" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Geplante Dauer</label>
+                        <select id="modalTaskDuration" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <option value="15m">15 Min.</option>
+                            <option value="30m">30 Min.</option>
+                            <option value="45m">45 Min.</option>
+                            <option value="1h" selected>1 Stunde</option>
+                            <option value="1.5h">1,5 Stunden</option>
+                            <option value="2h">2 Stunden</option>
+                            <option value="3h">3 Stunden</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Kurze Notiz / Unterpunkte (Optional)</label>
+                    <input type="text" id="modalTaskSubtext" placeholder="z. B. Handy in den Flugmodus, 3 Kernthemen skizzieren" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeTaskModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium">
+                        Abbrechen
+                    </button>
+                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/25">
+                        Speichern
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Reset Confirmation -->
+    <div id="resetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <div class="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
+                <i class="ph-bold ph-warning-circle text-2xl"></i>
+            </div>
+            <h3 class="text-base font-bold text-white">Daten zurücksetzen?</h3>
+            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                Möchtest du das Dashboard auf die vorinstallierten Beispieldaten zurücksetzen oder alle Aufgaben komplett leeren?
+            </p>
+            <div class="flex flex-col gap-2 mt-5">
+                <button onclick="confirmResetToSample()" class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-all-custom">
+                    Beispieldaten wiederherstellen
+                </button>
+                <button onclick="confirmClearAll()" class="w-full py-2.5 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/25 font-medium text-xs transition-all-custom">
+                    Alle Aufgaben & Erfolge leeren
+                </button>
+                <button onclick="closeResetModal()" class="w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs mt-1">
+                    Abbrechen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2.5 bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-2xl shadow-2xl transition-all duration-300">
+        <i id="toastIcon" class="ph-fill ph-check-circle text-emerald-400 text-lg"></i>
+        <span id="toastMessage" class="text-xs sm:text-sm font-medium">Aktion erfolgreich</span>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        const STORAGE_KEY = 'fokusflow_dashboard_v1';
+
+        const DAYS = [
+            { index: 0, short: 'Mo', full: 'Montag' },
+            { index: 1, short: 'Di', full: 'Dienstag' },
+            { index: 2, short: 'Mi', full: 'Mittwoch' },
+            { index: 3, short: 'Do', full: 'Donnerstag' },
+            { index: 4, short: 'Fr', full: 'Freitag' },
+            { index: 5, short: 'Sa', full: 'Samstag' },
+            { index: 6, short: 'So', full: 'Sonntag' }
+        ];
+
+        const CATEGORIES = {
+            fokus: {
+                id: 'fokus',
+                label: 'Fokus',
+                icon: 'ph-brain',
+                badgeBg: 'bg-purple-500/15',
+                badgeText: 'text-purple-300',
+                badgeBorder: 'border-purple-500/30',
+                dotBg: 'bg-purple-500',
+                accentBorder: 'border-l-purple-500'
+            },
+            business: {
+                id: 'business',
+                label: 'Business',
+                icon: 'ph-briefcase',
+                badgeBg: 'bg-indigo-500/15',
+                badgeText: 'text-indigo-300',
+                badgeBorder: 'border-indigo-500/30',
+                dotBg: 'bg-indigo-500',
+                accentBorder: 'border-l-indigo-500'
+            },
+            sport: {
+                id: 'sport',
+                label: 'Sport',
+                icon: 'ph-barbell',
+                badgeBg: 'bg-emerald-500/15',
+                badgeText: 'text-emerald-300',
+                badgeBorder: 'border-emerald-500/30',
+                dotBg: 'bg-emerald-500',
+                accentBorder: 'border-l-emerald-500'
+            },
+            familie: {
+                id: 'familie',
+                label: 'Familie',
+                icon: 'ph-users-three',
+                badgeBg: 'bg-amber-500/15',
+                badgeText: 'text-amber-300',
+                badgeBorder: 'border-amber-500/30',
+                dotBg: 'bg-amber-500',
+                accentBorder: 'border-l-amber-500'
+            },
+            routine: {
+                id: 'routine',
+                label: 'Routine',
+                icon: 'ph-sun-horizon',
+                badgeBg: 'bg-sky-500/15',
+                badgeText: 'text-sky-300',
+                badgeBorder: 'border-sky-500/30',
+                dotBg: 'bg-sky-500',
+                accentBorder: 'border-l-sky-500'
+            }
+        };
+
+        const DURATION_MINUTES = {
+            '15m': 15,
+            '30m': 30,
+            '45m': 45,
+            '1h': 60,
+            '1.5h': 90,
+            '2h': 120,
+            '3h': 180
+        };
+
+        // Determine current real weekday (0 = Monday ... 6 = Sunday)
+        function getTodayIndex() {
+            const jsDay = new Date().getDay(); // 0 = Sun, 1 = Mon ...
+            return jsDay === 0 ? 6 : jsDay - 1;
+        }
+
+        const todayIndex = getTodayIndex();
+        let selectedDayIndex = todayIndex;
+        let activeCategoryFilter = 'all';
+
+        // Default realistic sample data
+        function getSampleData() {
+            return {
+                tasks: [
+                    // Monday
+                    { id: 't1', day: 0, time: '07:30', duration: '30m', title: 'Morgenroutine & Tagesplanung', subtext: 'Hydration, 10 Min. Mobility & Top-3 Ziele definieren', category: 'routine', completed: true },
+                    { id: 't2', day: 0, time: '09:00', duration: '1.5h', title: 'Deep Work: Produkt-Architektur', subtext: 'Keine E-Mails, Fokus auf Kern-Features', category: 'fokus', completed: true },
+                    { id: 't3', day: 0, time: '11:30', duration: '45m', title: 'Weekly Sync mit dem Team', subtext: 'Meilensteine & Blocker besprechen', category: 'business', completed: true },
+                    { id: 't4', day: 0, time: '17:30', duration: '1h', title: 'Krafttraining (Oberkörper)', subtext: 'Gym Session inkl. Warm-up', category: 'sport', completed: true },
+
+                    // Tuesday
+                    { id: 't5', day: 1, time: '08:00', duration: '30m', title: 'Journaling & Kaffee im Ruhigen', subtext: 'Dankbarkeit & Fokus-Gedanke', category: 'routine', completed: true },
+                    { id: 't6', day: 1, time: '09:30', duration: '2h', title: 'Kundenpräsentation finalisieren', subtext: 'Pitch-Deck Folien 1–12 überarbeiten', category: 'business', completed: true },
+                    { id: 't7', day: 1, time: '14:00', duration: '1h', title: 'Code-Review & Performance-Check', subtext: 'Pull Requests prüfen', category: 'fokus', completed: true },
+                    { id: 't8', day: 1, time: '19:00', duration: '1.5h', title: 'Gemeinsames Kochen & Familienabend', subtext: 'Handyfreie Zeit ab 19 Uhr', category: 'familie', completed: false },
+
+                    // Wednesday (or current middle of week)
+                    { id: 't9', day: 2, time: '07:30', duration: '30m', title: 'Morgen-Spaziergang an der frischen Luft', subtext: 'Tageslicht tanken & Podcast hören', category: 'routine', completed: true },
+                    { id: 't10', day: 2, time: '09:00', duration: '2h', title: 'Deep Work: Dashboard UI/UX Konzept', subtext: 'Time-Blocking Komponenten ausarbeiten', category: 'fokus', completed: true },
+                    { id: 't11', day: 2, time: '13:30', duration: '45m', title: 'Strategie-Call & Quartalsplanung', subtext: 'KPIs und Budget-Abgleich', category: 'business', completed: false },
+                    { id: 't12', day: 2, time: '17:00', duration: '45m', title: '5 km Tempolauf im Park', subtext: 'Zone 2–3 Ausdauerlauf', category: 'sport', completed: false },
+                    { id: 't13', day: 2, time: '20:00', duration: '1h', title: 'Lesezeit & Abend-Reset', subtext: '20 Seiten Sachbuch lesen', category: 'familie', completed: false },
+
+                    // Thursday
+                    { id: 't14', day: 3, time: '08:30', duration: '1.5h', title: 'Fokus-Block: Content & Newsletter', subtext: 'Entwurf schreiben und planen', category: 'fokus', completed: false },
+                    { id: 't15', day: 3, time: '11:00', duration: '1h', title: 'Partner-Meeting & Kooperationen', subtext: 'Q4 Kampagnen abstimmen', category: 'business', completed: false },
+                    { id: 't16', day: 3, time: '18:00', duration: '1h', title: 'Mobility & Core-Workout', subtext: 'Dehnen & Rückentraining', category: 'sport', completed: false },
+
+                    // Friday
+                    { id: 't17', day: 4, time: '09:00', duration: '1.5h', title: 'Inbox Zero & Wochenabschluss', subtext: 'Alle offenen Tickets sortieren', category: 'business', completed: false },
+                    { id: 't18', day: 4, time: '14:00', duration: '45m', title: 'Wochen-Review & Planung nächste Woche', subtext: 'Erfolge feiern & Kalender strukturieren', category: 'fokus', completed: false },
+                    { id: 't19', day: 4, time: '18:30', duration: '2h', title: 'Abendessen mit Familie / Freunden', subtext: 'Wochenende einläuten', category: 'familie', completed: false },
+
+                    // Saturday
+                    { id: 't20', day: 5, time: '09:30', duration: '1h', title: 'Langer Wochenend-Lauf', subtext: 'Entspannte 8 km Runde', category: 'sport', completed: false },
+                    { id: 't21', day: 5, time: '11:30', duration: '2h', title: 'Familienausflug & Wochenmarkt', subtext: 'Frische Einkäufe & Kaffee', category: 'familie', completed: false },
+
+                    // Sunday
+                    { id: 't22', day: 6, time: '10:00', duration: '1.5h', title: 'Entspanntes Sonntagsfrühstück', subtext: 'Zeit mit der Familie', category: 'familie', completed: false },
+                    { id: 't23', day: 6, time: '17:00', duration: '30m', title: 'Wochen-Setup & Ziele definieren', subtext: 'Top-Prioritäten für Montag festlegen', category: 'routine', completed: false }
+                ],
+                wins: [
+                    { id: 'w1', text: '3 Tage in Folge je 90+ Minuten ungestörte Deep-Work-Sessions geschafft' },
+                    { id: 'w2', text: 'Kunden-Pitch vorzeitig fertiggestellt & positives Feedback erhalten' },
+                    { id: 'w3', text: 'Morgenroutine ohne Smartphone in der ersten Stunde durchgezogen' }
+                ],
+                notes: 'Fokus am Vormittag funktioniert extrem gut, wenn das Smartphone in einem anderen Raum liegt. Für nächste Woche: Nachmittags-Meetings stärker bündeln.'
+            };
+        }
+
+        let appState = loadState();
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) {
+                    const sample = getSampleData();
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(sample));
+                    return sample;
+                }
+                return JSON.parse(raw);
+            } catch (e) {
+                console.error('Fehler beim Laden aus localStorage:', e);
+                return getSampleData();
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error('Fehler beim Speichern:', e);
+            }
+        }
+
+        // Format header date nicely in German
+        function updateHeaderDate() {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('de-DE', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            });
+            document.getElementById('currentDateDisplay').textContent = formatter.format(now);
+        }
+
+        // Render Top Day Selector Tabs (Mo - So)
+        function renderDayTabs() {
+            const container = document.getElementById('dayTabsContainer');
+            container.innerHTML = '';
+
+            DAYS.forEach(d => {
+                const dayTasks = appState.tasks.filter(t => Number(t.day) === d.index);
+                const completedCount = dayTasks.filter(t => t.completed).length;
+                const totalCount = dayTasks.length;
+                const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+                const isSelected = d.index === selectedDayIndex;
+                const isToday = d.index === todayIndex;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.onclick = () => {
+                    selectedDayIndex = d.index;
+                    renderAll();
+                };
+
+                btn.className = `group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all-custom text-left ${
+                    isSelected
+                        ? 'bg-indigo-600/20 border-indigo-500 shadow-lg shadow-indigo-500/10'
+                        : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                }`;
+
+                btn.innerHTML = `
+                    <div class="w-full flex items-center justify-between mb-1.5">
+                        <span class="text-xs sm:text-sm font-bold ${isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white'}">${d.short}</span>
+                        ${isToday ? `<span class="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" title="Heute"></span>` : ''}
+                    </div>
+                    <div class="w-full">
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                            <span>${completedCount}/${totalCount}</span>
+                            <span class="${percent === 100 && totalCount > 0 ? 'text-emerald-400 font-semibold' : ''}">${percent}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-300 ${
+                                percent === 100 && totalCount > 0
+                                    ? 'bg-emerald-400'
+                                    : isSelected ? 'bg-indigo-400' : 'bg-indigo-500/70'
+                            }" style="width: ${percent}%"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        // Render Category Filter Pills
+        function renderCategoryFilters() {
+            const container = document.getElementById('categoryFilterContainer');
+            const dayTasks = appState.tasks.filter(t => Number(t.day) === selectedDayIndex);
+
+            let html = `
+                <button onclick="setCategoryFilter('all')" class="px-3 py-1.5 rounded-xl text-xs font-medium transition-all-custom shrink-0 flex items-center gap-1.5 ${
+                    activeCategoryFilter === 'all'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                        : 'bg-slate-950/80 text-slate-400 hover:text-white border border-slate-800'
+                }">
+                    <span>Alle</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded-md bg-black/20">${dayTasks.length}</span>
+                </button>
+            `;
+
+            Object.values(CATEGORIES).forEach(cat => {
+                const count = dayTasks.filter(t => t.category === cat.id).length;
+                const isActive = activeCategoryFilter === cat.id;
+                html += `
+                    <button onclick="setCategoryFilter('${cat.id}')" class="px-3 py-1.5 rounded-xl text-xs font-medium transition-all-custom shrink-0 flex items-center gap-1.5 border ${
+                        isActive
+                            ? `${cat.badgeBg} ${cat.badgeText} ${cat.badgeBorder}`
+                            : 'bg-slate-950/80 text-slate-400 hover:text-slate-200 border-slate-800'
+                    }">
+                        <span class="w-2 h-2 rounded-full ${cat.dotBg}"></span>
+                        <span>${cat.label}</span>
+                        <span class="text-[10px] opacity-75">(${count})</span>
+                    </button>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function setCategoryFilter(catId) {
+            activeCategoryFilter = catId;
+            renderAll();
+        }
+
+        // Render Daily Timeline & Progress
+        function renderDailySection() {
+            const dayObj = DAYS[selectedDayIndex];
+            const isToday = selectedDayIndex === todayIndex;
+
+            document.getElementById('selectedDayTitle').textContent = `${dayObj.full} — Tagesfokus`;
+            const badge = document.getElementById('selectedDayBadge');
+            if (isToday) {
+                badge.textContent = 'Heute';
+                badge.className = 'text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium';
+            } else {
+                badge.textContent = dayObj.short;
+                badge.className = 'text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium';
+            }
+
+            // All tasks for selected day
+            const allDayTasks = appState.tasks
+                .filter(t => Number(t.day) === selectedDayIndex)
+                .sort((a, b) => (a.time || '23:59').localeCompare(b.time || '23:59'));
+
+            const completedCount = allDayTasks.filter(t => t.completed).length;
+            const totalCount = allDayTasks.length;
+            const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+            document.getElementById('dailyCounterText').textContent = `${completedCount} von ${totalCount} erledigt`;
+            document.getElementById('dailyPercentText').textContent = `${percent}%`;
+            document.getElementById('dailyProgressBar').style.width = `${percent}%`;
+
+            // Calculate total planned duration
+            const totalMinutes = allDayTasks.reduce((acc, t) => acc + (DURATION_MINUTES[t.duration] || 30), 0);
+            const hours = (totalMinutes / 60).toFixed(1).replace('.0', '');
+            document.getElementById('totalPlannedTime').textContent = `Geplant: ${hours} Std.`;
+
+            // Filter tasks by category if selected
+            const filteredTasks = activeCategoryFilter === 'all'
+                ? allDayTasks
+                : allDayTasks.filter(t => t.category === activeCategoryFilter);
+
+            const timelineContainer = document.getElementById('timelineContainer');
+            timelineContainer.innerHTML = '';
+
+            if (filteredTasks.length === 0) {
+                timelineContainer.innerHTML = `
+                    <div class="text-center py-10 px-4 border border-dashed border-slate-800 rounded-2xl bg-slate-950/40">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-3 text-slate-500">
+                            <i class="ph-duotone ph-calendar-plus text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-300">Keine Zeitblöcke für diese Ansicht</p>
+                        <p class="text-xs text-slate-500 mt-1">Füge oben ein neues Ziel hinzu oder wechsle den Kategorie-Filter.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filteredTasks.forEach(task => {
+                const cat = CATEGORIES[task.category] || CATEGORIES.fokus;
+                const item = document.createElement('div');
+                item.className = 'timeline-item relative flex items-start gap-3.5 sm:gap-4 group';
+
+                item.innerHTML = `
+                    <!-- Left Time & Timeline Node -->
+                    <div class="timeline-line relative flex flex-col items-center w-12 shrink-0 pt-1">
+                        <span class="text-xs font-semibold ${task.completed ? 'text-slate-500 line-through' : 'text-slate-300'} mb-1.5">
+                            ${task.time || '--:--'}
+                        </span>
+                        <button onclick="toggleTaskCompleted('${task.id}')" aria-label="Status umschalten" class="relative z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all-custom ${
+                            task.completed
+                                ? 'bg-emerald-500 border-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                                : 'bg-slate-950 border-slate-600 hover:border-indigo-400 text-transparent'
+                        }">
+                            <i class="ph-bold ph-check text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Right Task Card (Time-block style) -->
+                    <div class="flex-1 bg-slate-950/90 hover:bg-slate-950 border border-slate-800/90 border-l-4 ${cat.accentBorder} rounded-2xl p-3.5 sm:p-4 transition-all-custom shadow-md ${
+                        task.completed ? 'opacity-60' : ''
+                    }">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="space-y-1 flex-1 cursor-pointer" onclick="toggleTaskCompleted('${task.id}')">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${cat.badgeBg} ${cat.badgeText} ${cat.badgeBorder}">
+                                        <i class="ph ${cat.icon}"></i>
+                                        ${cat.label}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                                        <i class="ph ph-hourglass-medium"></i>
+                                        ${task.duration || '30m'}
+                                    </span>
+                                </div>
+                                <h4 class="text-sm sm:text-base font-semibold ${task.completed ? 'line-through text-slate-400' : 'text-white'} pt-0.5">
+                                    ${escapeHtml(task.title)}
+                                </h4>
+                                ${task.subtext ? `<p class="text-xs text-slate-400 leading-relaxed">${escapeHtml(task.subtext)}</p>` : ''}
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onclick="openEditTaskModal('${task.id}')" title="Bearbeiten" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                                    <i class="ph ph-pencil-simple text-base"></i>
+                                </button>
+                                <button onclick="deleteTask('${task.id}')" title="Löschen" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10">
+                                    <i class="ph ph-trash text-base"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                timelineContainer.appendChild(item);
+            });
+        }
+
+        // Render Weekly Statistics, Bar Chart & Category Distribution
+        function renderWeeklyStats() {
+            const allTasks = appState.tasks;
+            const completedTasks = allTasks.filter(t => t.completed);
+            const totalCount = allTasks.length;
+            const completedCount = completedTasks.length;
+            const weeklyRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+            document.getElementById('weeklySuccessRate').textContent = `${weeklyRate}%`;
+            document.getElementById('weeklyTotalCompletedSub').textContent = `${completedCount}/${totalCount} erledigt`;
+
+            // Calculate completed focus hours
+            const completedMinutes = completedTasks.reduce((acc, t) => acc + (DURATION_MINUTES[t.duration] || 30), 0);
+            const completedHours = (completedMinutes / 60).toFixed(1).replace('.0', '');
+            document.getElementById('weeklyFocusHours').textContent = `${completedHours}h`;
+
+            // Calculate Streak (consecutive days with >= 1 completed task up to today/selected)
+            let streak = 0;
+            for (let d = 0; d <= 6; d++) {
+                const dayCompleted = allTasks.filter(t => Number(t.day) === d && t.completed).length;
+                if (dayCompleted > 0) {
+                    streak++;
+                }
+            }
+            document.getElementById('currentStreakCount').textContent = streak;
+
+            // Render Bar Chart (Mo - So)
+            const chartContainer = document.getElementById('weeklyChartContainer');
+            chartContainer.innerHTML = '';
+
+            // Find max tasks on a single day for scaling
+            let maxTasksInDay = 4;
+            DAYS.forEach(d => {
+                const cnt = allTasks.filter(t => Number(t.day) === d.index).length;
+                if (cnt > maxTasksInDay) maxTasksInDay = cnt;
+            });
+
+            DAYS.forEach(d => {
+                const dayTasks = allTasks.filter(t => Number(t.day) === d.index);
+                const done = dayTasks.filter(t => t.completed).length;
+                const total = dayTasks.length;
+
+                const totalHeightPct = total > 0 ? Math.max(16, Math.round((total / maxTasksInDay) * 100)) : 8;
+                const doneHeightPct = total > 0 ? Math.round((done / total) * 100) : 0;
+                const isSelected = d.index === selectedDayIndex;
+
+                const col = document.createElement('div');
+                col.className = 'flex-1 flex flex-col items-center h-full justify-end group cursor-pointer';
+                col.onclick = () => {
+                    selectedDayIndex = d.index;
+                    renderAll();
+                };
+
+                col.innerHTML = `
+                    <div class="text-[10px] font-semibold mb-1.5 transition-transform group-hover:-translate-y-0.5 ${
+                        done === total && total > 0 ? 'text-emerald-400' : 'text-slate-400'
+                    }">
+                        ${done}/${total}
+                    </div>
+                    <div class="w-full max-w-[38px] bg-slate-800/80 border border-slate-700/60 rounded-xl overflow-hidden flex flex-col justify-end transition-all duration-300 group-hover:border-indigo-500/50" style="height: ${totalHeightPct}%">
+                        <div class="w-full transition-all duration-500 ${
+                            done === total && total > 0
+                                ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
+                                : 'bg-gradient-to-t from-indigo-600 to-purple-500'
+                        }" style="height: ${doneHeightPct}%"></div>
+                    </div>
+                    <span class="text-xs mt-2 font-medium ${isSelected ? 'text-indigo-400 font-bold' : 'text-slate-400'}">
+                        ${d.short}
+                    </span>
+                `;
+                chartContainer.appendChild(col);
+            });
+
+            // Category Distribution Breakdown
+            const breakdownBar = document.getElementById('categoryBreakdownBar');
+            const legendContainer = document.getElementById('categoryLegend');
+            breakdownBar.innerHTML = '';
+            legendContainer.innerHTML = '';
+
+            let topCat = { label: '-', count: 0 };
+
+            Object.values(CATEGORIES).forEach(cat => {
+                const count = allTasks.filter(t => t.category === cat.id).length;
+                if (count > topCat.count) {
+                    topCat = { label: cat.label, count };
+                }
+                const pct = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+
+                if (pct > 0) {
+                    const seg = document.createElement('div');
+                    seg.className = `h-full ${cat.dotBg} transition-all duration-500`;
+                    seg.style.width = `${pct}%`;
+                    seg.title = `${cat.label}: ${count} Aufgaben (${pct}%)`;
+                    breakdownBar.appendChild(seg);
+                }
+
+                const leg = document.createElement('div');
+                leg.className = 'flex items-center gap-1.5 text-[11px] text-slate-400';
+                leg.innerHTML = `
+                    <span class="w-2 h-2 rounded-full ${cat.dotBg}"></span>
+                    <span>${cat.label}</span>
+                    <span class="text-slate-500">(${count})</span>
+                `;
+                legendContainer.appendChild(leg);
+            });
+
+            document.getElementById('topCategoryLabel').textContent = topCat.count > 0 ? `Top: ${topCat.label} (${topCat.count})` : 'Keine Daten';
+        }
+
+        // Render Weekly Top Wins & Notes
+        function renderWinsAndNotes() {
+            const winsContainer = document.getElementById('winsListContainer');
+            winsContainer.innerHTML = '';
+
+            if (!appState.wins || appState.wins.length === 0) {
+                winsContainer.innerHTML = `
+                    <p class="text-xs text-slate-500 italic py-2">Noch keine Wochen-Erfolge eingetragen. Feiere auch kleine Fortschritte!</p>
+                `;
+            } else {
+                appState.wins.forEach(w => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center justify-between gap-2 bg-slate-950/70 border border-slate-800/80 rounded-xl px-3.5 py-2.5 group';
+                    div.innerHTML = `
+                        <div class="flex items-start gap-2.5">
+                            <i class="ph-fill ph-star text-amber-400 text-sm mt-0.5 shrink-0"></i>
+                            <span class="text-xs sm:text-sm text-slate-200">${escapeHtml(w.text)}</span>
+                        </div>
+                        <button onclick="deleteWin('${w.id}')" class="text-slate-500 hover:text-rose-400 opacity-75 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                            <i class="ph ph-x text-sm"></i>
+                        </button>
+                    `;
+                    winsContainer.appendChild(div);
+                });
+            }
+
+            const notesArea = document.getElementById('weeklyNotesArea');
+            if (document.activeElement !== notesArea) {
+                notesArea.value = appState.notes || '';
+            }
+        }
+
+        // Interactive Task Handlers
+        function toggleTaskCompleted(taskId) {
+            const task = appState.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.completed = !task.completed;
+                saveState();
+                renderAll();
+            }
+        }
+
+        function handleQuickAdd(e) {
+            e.preventDefault();
+            const titleInput = document.getElementById('quickTitle');
+            const timeInput = document.getElementById('quickTime');
+            const durationInput = document.getElementById('quickDuration');
+            const categoryInput = document.getElementById('quickCategory');
+
+            const title = titleInput.value.trim();
+            if (!title) return;
+
+            const newTask = {
+                id: 'task_' + Date.now(),
+                day: selectedDayIndex,
+                time: timeInput.value || '09:00',
+                duration: durationInput.value || '30m',
+                title: title,
+                subtext: '',
+                category: categoryInput.value || 'fokus',
+                completed: false
+            };
+
+            appState.tasks.push(newTask);
+            saveState();
+            titleInput.value = '';
+            renderAll();
+        }
+
+        function deleteTask(taskId) {
+            appState.tasks = appState.tasks.filter(t => t.id !== taskId);
+            saveState();
+            renderAll();
+        }
+
+        // Modal Handlers for Detailed Add / Edit
+        function openNewTaskModal() {
+            document.getElementById('modalTitle').textContent = 'Neues Tagesziel planen';
+            document.getElementById('editTaskId').value = '';
+            document.getElementById('modalTaskTitle').value = '';
+            document.getElementById('modalTaskDay').value = String(selectedDayIndex);
+            document.getElementById('modalTaskCategory').value = 'fokus';
+            document.getElementById('modalTaskTime').value = '10:00';
+            document.getElementById('modalTaskDuration').value = '1h';
+            document.getElementById('modalTaskSubtext').value = '';
+
+            const modal = document.getElementById('taskModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('modalTaskTitle').focus();
+        }
+
+        function openEditTaskModal(taskId) {
+            const task = appState.tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            document.getElementById('modalTitle').textContent = 'Zeitblock bearbeiten';
+            document.getElementById('editTaskId').value = task.id;
+            document.getElementById('modalTaskTitle').value = task.title;
+            document.getElementById('modalTaskDay').value = String(task.day);
+            document.getElementById('modalTaskCategory').value = task.category;
+            document.getElementById('modalTaskTime').value = task.time || '09:00';
+            document.getElementById('modalTaskDuration').value = task.duration || '30m';
+            document.getElementById('modalTaskSubtext').value = task.subtext || '';
+
+            const modal = document.getElementById('taskModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeTaskModal() {
+            const modal = document.getElementById('taskModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function handleSaveDetailedTask(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editTaskId').value;
+            const title = document.getElementById('modalTaskTitle').value.trim();
+            const day = Number(document.getElementById('modalTaskDay').value);
+            const category = document.getElementById('modalTaskCategory').value;
+            const time = document.getElementById('modalTaskTime').value;
+            const duration = document.getElementById('modalTaskDuration').value;
+            const subtext = document.getElementById('modalTaskSubtext').value.trim();
+
+            if (!title) return;
+
+            if (editId) {
+                const existing = appState.tasks.find(t => t.id === editId);
+                if (existing) {
+                    existing.title = title;
+                    existing.day = day;
+                    existing.category = category;
+                    existing.time = time;
+                    existing.duration = duration;
+                    existing.subtext = subtext;
+                }
+            } else {
+                appState.tasks.push({
+                    id: 'task_' + Date.now(),
+                    day,
+                    time,
+                    duration,
+                    title,
+                    subtext,
+                    category,
+                    completed: false
+                });
+            }
+
+            selectedDayIndex = day;
+            saveState();
+            closeTaskModal();
+            renderAll();
+        }
+
+        // Wins & Notes Handlers
+        function handleAddWin(e) {
+            e.preventDefault();
+            const input = document.getElementById('newWinInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            if (!appState.wins) appState.wins = [];
+            appState.wins.unshift({
+                id: 'win_' + Date.now(),
+                text
+            });
+
+            input.value = '';
+            saveState();
+            renderWinsAndNotes();
+        }
+
+        function deleteWin(winId) {
+            appState.wins = appState.wins.filter(w => w.id !== winId);
+            saveState();
+            renderWinsAndNotes();
+        }
+
+        let noteTimeout;
+        function handleNotesChange(val) {
+            appState.notes = val;
+            saveState();
+            const badge = document.getElementById('saveNoteStatus');
+            badge.classList.remove('opacity-0');
+            clearTimeout(noteTimeout);
+            noteTimeout = setTimeout(() => {
+                badge.classList.add('opacity-0');
+            }, 1500);
+        }
+
+        // Reset Modal Handlers
+        function openResetModal() {
+            const modal = document.getElementById('resetModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('resetModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmResetToSample() {
+            appState = getSampleData();
+            saveState();
+            closeResetModal();
+            renderAll();
+        }
+
+        function confirmClearAll() {
+            appState = { tasks: [], wins: [], notes: '' };
+            saveState();
+            closeResetModal();
+            renderAll();
+            showToast('Alle Einträge wurden geleert.', 'info');
+        }
+
+        // Toast Feedback Helper
+        let toastTimer;
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toastNotification');
+            const icon = document.getElementById('toastIcon');
+            const msg = document.getElementById('toastMessage');
+
+            msg.textContent = message;
+            if (type === 'error') {
+                icon.className = 'ph-fill ph-warning-octagon text-rose-400 text-lg';
+            } else if (type === 'info') {
+                icon.className = 'ph-fill ph-info text-indigo-400 text-lg';
+            } else {
+                icon.className = 'ph-fill ph-check-circle text-emerald-400 text-lg';
+            }
+
+            toast.classList.remove('hidden');
+            toast.classList.add('flex');
+
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.remove('flex');
+            }, 3200);
+        }
+
+        // Export Dashboard State as JSON file
+        function exportData() {
+            try {
+                const exportPayload = {
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    data: appState
+                };
+                const jsonString = JSON.stringify(exportPayload, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const dateStamp = new Date().toISOString().slice(0, 10);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `fokusflow-backup-${dateStamp}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast('Backup-Datei wurde heruntergeladen!');
+            } catch (err) {
+                console.error('Export-Fehler:', err);
+                showToast('Fehler beim Erstellen des Backups.', 'error');
+            }
+        }
+
+        // Trigger Hidden File Input for Import
+        function triggerImport() {
+            const fileInput = document.getElementById('importFileInput');
+            fileInput.value = '';
+            fileInput.click();
+        }
+
+        // Handle JSON Backup Import
+        function handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    const importedState = parsed.data ? parsed.data : parsed;
+
+                    if (!importedState || !Array.isArray(importedState.tasks)) {
+                        showToast('Ungültiges Dateiformat. Keine Aufgaben gefunden.', 'error');
+                        return;
+                    }
+
+                    appState = {
+                        tasks: importedState.tasks || [],
+                        wins: Array.isArray(importedState.wins) ? importedState.wins : [],
+                        notes: typeof importedState.notes === 'string' ? importedState.notes : ''
+                    };
+
+                    saveState();
+                    renderAll();
+                    showToast('Backup erfolgreich importiert!');
+                } catch (err) {
+                    console.error('Import-Fehler:', err);
+                    showToast('Die Datei konnte nicht gelesen werden.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Helper against XSS
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderAll() {
+            renderDayTabs();
+            renderCategoryFilters();
+            renderDailySection();
+            renderWeeklyStats();
+            renderWinsAndNotes();
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateHeaderDate();
+            renderAll();
+        });
+    </script>
+</body>
+</html>
+```
